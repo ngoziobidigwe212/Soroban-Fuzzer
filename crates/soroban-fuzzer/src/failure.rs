@@ -24,6 +24,9 @@ pub enum FailureKind {
     ResourceBudgetExceeded,
     /// A declared signer did not authorise the call: missing `require_auth`.
     MissingAuth,
+    /// The action still changed the ledger when replayed with no signatures
+    /// (see [`Fuzzer::check_unsigned_calls`](crate::Fuzzer::check_unsigned_calls)).
+    AuthBypass,
 }
 
 impl FailureKind {
@@ -44,19 +47,16 @@ impl FailureKind {
                 "a call is close to network limits: it may fail as state grows"
             }
             Self::MissingAuth => "a signer was not required: add `require_auth()`",
+            Self::AuthBypass => "the call works without any signature: enforce `require_auth()`",
         }
     }
 
     /// Classify a panic message coming out of a contract call.
+    ///
+    /// Matches the host's structured error code rather than free text, so a
+    /// contract panic that merely mentions "budget" is not misclassified.
     pub(crate) fn from_panic(msg: &str) -> Self {
-        let m = msg.to_ascii_lowercase();
-        if m.contains("archived") {
-            Self::ArchivedEntry
-        } else if m.contains("exceededlimit")
-            || m.contains("exceeded limit")
-            || m.contains("resource limit")
-            || m.contains("budget")
-        {
+        if msg.contains("Error(Budget, ExceededLimit)") {
             Self::ResourceLimitExceeded
         } else {
             Self::UnexpectedPanic
@@ -114,5 +114,53 @@ fn first_lines(s: &str, n: usize) -> String {
             lines[..n].join("\n"),
             lines.len() - n
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classifies_host_errors_by_code() {
+        let host = "HostError: Error(Budget, ExceededLimit)\n  event log …";
+        assert_eq!(
+            FailureKind::from_panic(host),
+            FailureKind::ResourceLimitExceeded
+        );
+        assert_eq!(
+            FailureKind::from_panic("my contract ran over budget"),
+            FailureKind::UnexpectedPanic
+        );
+        assert_eq!(
+            FailureKind::from_panic("attempt to add with overflow"),
+            FailureKind::UnexpectedPanic
+        );
+    }
+
+    #[test]
+    fn report_marks_the_failing_step() {
+        let f = FuzzFailure {
+            kind: FailureKind::MissingAuth,
+            message: "boom".into(),
+            step: Some(1),
+            steps: vec![Step::Call("a"), Step::AdvanceLedger(5), Step::Call("b")],
+            seed: 9,
+        };
+        let text = f.to_string();
+        assert!(
+            text.contains("1: <advance 5 ledgers>  <-- failed here"),
+            "{text}"
+        );
+        assert!(text.contains("SOROBAN_FUZZ_SEED=9"), "{text}");
+        assert!(text.contains(FailureKind::MissingAuth.hint()), "{text}");
+    }
+
+    #[test]
+    fn long_messages_are_truncated() {
+        let long: String = (0..50).map(|i| format!("line {i}\n")).collect();
+        let shown = first_lines(&long, 12);
+        assert!(shown.contains("line 11") && !shown.contains("line 12"));
+        assert!(shown.contains("38 more lines"));
     }
 }

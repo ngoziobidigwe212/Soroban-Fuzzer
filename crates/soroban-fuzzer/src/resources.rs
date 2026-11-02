@@ -124,7 +124,7 @@ impl ResourceBudget {
         let p = percent.clamp(1, 100);
         let m = Self::MAINNET;
         let s32 = |v: u32| (v as u64 * p as u64 / 100) as u32;
-        let s64 = |v: i64| v / 100 * p as i64;
+        let s64 = |v: i64| (v as i128 * p as i128 / 100) as i64;
         Self {
             max_instructions: s64(m.max_instructions),
             max_mem_bytes: s64(m.max_mem_bytes),
@@ -188,5 +188,69 @@ impl ResourceBudget {
 impl Default for ResourceBudget {
     fn default() -> Self {
         Self::mainnet_percent(75)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn budget_reports_every_exceeded_limit() {
+        let budget = ResourceBudget {
+            max_instructions: 100,
+            max_footprint_entries: 2,
+            ..ResourceBudget::UNLIMITED
+        };
+        let ok = ResourceUsage {
+            instructions: 100,
+            memory_read_entries: 2,
+            ..ResourceUsage::default()
+        };
+        assert_eq!(budget.check(&ok), None);
+        let over = ResourceUsage {
+            instructions: 101,
+            disk_read_entries: 1,
+            memory_read_entries: 2,
+            ..ResourceUsage::default()
+        };
+        let msg = budget.check(&over).unwrap();
+        assert!(msg.contains("instructions: 101 > 100"), "{msg}");
+        assert!(msg.contains("footprint_entries: 3 > 2"), "{msg}");
+    }
+
+    #[test]
+    fn mainnet_percent_scales_and_clamps() {
+        assert_eq!(
+            ResourceBudget::mainnet_percent(100),
+            ResourceBudget::MAINNET
+        );
+        assert_eq!(
+            ResourceBudget::mainnet_percent(500),
+            ResourceBudget::MAINNET
+        );
+        let half = ResourceBudget::mainnet_percent(50);
+        assert_eq!(half.max_footprint_entries, 200);
+        assert_eq!(half.max_instructions, 200_000_000);
+        assert_eq!(
+            ResourceBudget::default(),
+            ResourceBudget::mainnet_percent(75)
+        );
+    }
+
+    #[test]
+    fn peak_is_field_wise() {
+        let a = ResourceUsage {
+            instructions: 5,
+            write_bytes: 1,
+            ..Default::default()
+        };
+        let b = ResourceUsage {
+            instructions: 2,
+            write_bytes: 9,
+            ..Default::default()
+        };
+        let m = a.max(b);
+        assert_eq!((m.instructions, m.write_bytes), (5, 9));
     }
 }
