@@ -1,6 +1,8 @@
 # Soroban-Fuzzer
 
 [![CI](https://github.com/soroban-dev-labs/Soroban-Fuzzer/actions/workflows/ci.yml/badge.svg)](https://github.com/soroban-dev-labs/Soroban-Fuzzer/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/soroban-fuzzer.svg)](https://crates.io/crates/soroban-fuzzer)
+[![docs.rs](https://img.shields.io/docsrs/soroban-fuzzer)](https://docs.rs/soroban-fuzzer)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Stateful fuzzing for Soroban smart contracts, running in the `soroban-sdk` test environment. It finds missing `require_auth`, auth that isn't enforced, storage that expires, data lost from temporary storage, arithmetic traps and calls that blow mainnet resource limits, and shrinks each failure to a few steps you can replay.

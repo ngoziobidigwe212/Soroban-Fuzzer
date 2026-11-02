@@ -39,7 +39,7 @@ It runs in two modes that share one harness:
 
 ```toml
 [dev-dependencies]
-soroban-fuzzer = { git = "https://github.com/soroban-dev-labs/Soroban-Fuzzer" }
+soroban-fuzzer = "0.1"
 soroban-sdk = { version = "29", features = ["testutils"] }
 ```
 
