@@ -1,0 +1,17 @@
+[package]
+name = "soroban-fuzzer"
+version = "0.1.0"
+description = "Stateful, property-based fuzzing harness for Soroban smart contracts in the test environment"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["soroban", "stellar", "fuzzing", "proptest", "smart-contracts"]
+categories = ["development-tools::testing"]
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+proptest.workspace = true
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

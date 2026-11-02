@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.91"
+license = "Apache-2.0"
+repository = "https://github.com/soroban-dev-labs/Soroban-Fuzzer"
+
+[workspace.dependencies]
+soroban-sdk = "29.0.1"
+proptest = "1.12"
+
+[profile.test]
+# Contract code is hot in fuzz loops; a little optimisation makes runs much faster.
+opt-level = 1
