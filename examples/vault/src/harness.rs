@@ -6,13 +6,9 @@
 //! [`Variant`], so the same model drives the correct vault, its compiled
 //! Wasm, and each buggy variant.
 
-use std::{collections::BTreeMap, format, marker::PhantomData, string::String, vec, vec::Vec};
+use std::{marker::PhantomData, string::String, vec, vec::Vec};
 
 use soroban_fuzzer::prelude::*;
-use soroban_sdk::{
-    testutils::Address as _,
-    token::{StellarAssetClient, TokenClient},
-};
 
 use crate::{Vault, VaultClient, VaultError};
 
@@ -60,12 +56,12 @@ pub enum Action {
 
 pub struct VaultHarness<V> {
     pub vault: Address,
-    pub token: Address,
+    pub token: TestToken,
     pub actors: Actors,
     /// Model: each actor's balance inside the vault.
-    pub deposits: BTreeMap<ActorId, i128>,
+    pub deposits: Balances,
     /// Model: each actor's token wallet.
-    pub wallets: BTreeMap<ActorId, i128>,
+    pub wallets: Balances,
     _variant: PhantomData<fn() -> V>,
 }
 
@@ -83,39 +79,18 @@ impl<V> Clone for VaultHarness<V> {
     }
 }
 
-impl<V> VaultHarness<V> {
-    fn deposit_of(&self, a: ActorId) -> i128 {
-        self.deposits.get(&a).copied().unwrap_or(0)
-    }
-
-    fn wallet_of(&self, a: ActorId) -> i128 {
-        self.wallets.get(&a).copied().unwrap_or(0)
-    }
-
-    fn total(&self) -> i128 {
-        self.deposits.values().sum()
-    }
-}
-
 impl<V: Variant> Harness for VaultHarness<V> {
     type Action = Action;
 
     fn setup(env: &Env) -> Self {
-        let admin = Address::generate(env);
-        let token = env.register_stellar_asset_contract_v2(admin).address();
+        let token = TestToken::deploy(env);
         let actors = Actors::generate(env, ACTORS as usize);
-        let minter = StellarAssetClient::new(env, &token);
-        let mut wallets = BTreeMap::new();
-        for (id, addr) in actors.iter() {
-            minter.mint(addr, &WALLET);
-            wallets.insert(id, WALLET);
-        }
         Self {
-            vault: V::register(env, &token),
+            vault: V::register(env, &token.address),
+            wallets: token.mint_to_all(env, &actors, WALLET),
             token,
             actors,
-            deposits: BTreeMap::new(),
-            wallets,
+            deposits: Balances::new(),
             _variant: PhantomData,
         }
     }
@@ -135,94 +110,67 @@ impl<V: Variant> Harness for VaultHarness<V> {
 
     fn apply(&mut self, env: &Env, action: &Action) -> Result<Outcome, String> {
         let client = VaultClient::new(env, &self.vault);
+        let id = |a| self.actors.id(a);
+        let addr = |a| self.actors.get(a);
         match *action {
             Action::Deposit(a, amount) => {
-                let a = self.actors.id(a);
-                let x = amount.resolve(self.wallet_of(a));
-                let expected = if x <= 0 {
-                    Err(VaultError::InvalidAmount)
-                } else if self.wallet_of(a) < x {
-                    Err(VaultError::InsufficientFunds)
-                } else if self.deposit_of(a).checked_add(x).is_none()
-                    || self.total().checked_add(x).is_none()
-                {
-                    Err(VaultError::Overflow)
-                } else {
-                    Ok(())
-                };
-                let got = client.try_deposit(self.actors.get(a), &x);
-                let outcome = check_call(env, "deposit", got, expected)?;
-                if outcome == Outcome::Executed {
-                    *self.deposits.entry(a).or_default() += x;
-                    *self.wallets.entry(a).or_default() -= x;
-                }
-                Ok(outcome)
+                let (a, wallet) = (id(a), self.wallets.get(id(a)));
+                let x = amount.resolve(wallet);
+                let expected = expect_unless([
+                    (x <= 0, VaultError::InvalidAmount),
+                    (wallet < x, VaultError::InsufficientFunds),
+                    (
+                        self.deposits.get(a).checked_add(x).is_none()
+                            || self.deposits.total().checked_add(x).is_none(),
+                        VaultError::Overflow,
+                    ),
+                ]);
+                let got = client.try_deposit(addr(a), &x);
+                Ok(check_call(env, "deposit", got, expected)?.if_executed(|| {
+                    self.wallets.debit(a, x);
+                    self.deposits.credit(a, x);
+                }))
             }
             Action::Withdraw(a, amount) => {
-                let a = self.actors.id(a);
-                let x = amount.resolve(self.deposit_of(a));
-                let expected = if x <= 0 {
-                    Err(VaultError::InvalidAmount)
-                } else if self.deposit_of(a) < x {
-                    Err(VaultError::InsufficientBalance)
-                } else {
-                    Ok(())
-                };
-                let got = client.try_withdraw(self.actors.get(a), &x);
-                let outcome = check_call(env, "withdraw", got, expected)?;
-                if outcome == Outcome::Executed {
-                    *self.deposits.entry(a).or_default() -= x;
-                    *self.wallets.entry(a).or_default() += x;
-                }
-                Ok(outcome)
+                let (a, held) = (id(a), self.deposits.get(id(a)));
+                let x = amount.resolve(held);
+                let expected = expect_unless([
+                    (x <= 0, VaultError::InvalidAmount),
+                    (held < x, VaultError::InsufficientBalance),
+                ]);
+                let got = client.try_withdraw(addr(a), &x);
+                Ok(check_call(env, "withdraw", got, expected)?.if_executed(|| {
+                    self.deposits.debit(a, x);
+                    self.wallets.credit(a, x);
+                }))
             }
             Action::Transfer(a, b, amount) => {
-                let (a, b) = (self.actors.id(a), self.actors.id(b));
-                let x = amount.resolve(self.deposit_of(a));
-                let expected = if x <= 0 {
-                    Err(VaultError::InvalidAmount)
-                } else if self.deposit_of(a) < x {
-                    Err(VaultError::InsufficientBalance)
-                } else {
-                    Ok(())
-                };
-                let got = client.try_transfer(self.actors.get(a), self.actors.get(b), &x);
-                let outcome = check_call(env, "transfer", got, expected)?;
-                if outcome == Outcome::Executed {
-                    *self.deposits.entry(a).or_default() -= x;
-                    *self.deposits.entry(b).or_default() += x;
-                }
-                Ok(outcome)
+                let (a, b, held) = (id(a), id(b), self.deposits.get(id(a)));
+                let x = amount.resolve(held);
+                let expected = expect_unless([
+                    (x <= 0, VaultError::InvalidAmount),
+                    (held < x, VaultError::InsufficientBalance),
+                ]);
+                let got = client.try_transfer(addr(a), addr(b), &x);
+                Ok(check_call(env, "transfer", got, expected)?
+                    .if_executed(|| self.deposits.transfer(a, b, x)))
             }
         }
     }
 
     fn invariants(&self, env: &Env) -> Result<(), String> {
         let vault = VaultClient::new(env, &self.vault);
-        let token = TokenClient::new(env, &self.token);
-        for (id, addr) in self.actors.iter() {
-            let (got, want) = (vault.balance(addr), self.deposit_of(id));
-            if got != want {
-                return Err(format!(
-                    "vault balance of actor {}: contract {got}, model {want}",
-                    id.0
-                ));
-            }
-            let (got, want) = (token.balance(addr), self.wallet_of(id));
-            if got != want {
-                return Err(format!(
-                    "token wallet of actor {}: {got}, model {want}",
-                    id.0
-                ));
-            }
-        }
-        let (total, held) = (vault.total(), token.balance(&self.vault));
-        if total != self.total() || held != self.total() {
-            return Err(format!(
-                "vault total {total} / tokens held {held}, model {}",
-                self.total()
-            ));
-        }
+        self.deposits
+            .check(&self.actors, "vault balance", |a| vault.balance(a))?;
+        self.token
+            .check_balances(env, &self.actors, &self.wallets)?;
+        let total = self.deposits.total();
+        ensure_eq!(vault.total(), total, "vault total");
+        ensure_eq!(
+            self.token.client(env).balance(&self.vault),
+            total,
+            "tokens held by the vault"
+        );
         Ok(())
     }
 
