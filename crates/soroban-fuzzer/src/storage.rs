@@ -8,7 +8,7 @@
 use std::fmt;
 
 use soroban_sdk::{
-    xdr::{ContractDataDurability, LedgerKey, ScAddress, ScVal},
+    xdr::{ContractDataDurability, LedgerEntry, LedgerKey, ScAddress, ScVal},
     Address, Env, TryFromVal,
 };
 
@@ -141,9 +141,62 @@ pub(crate) fn to_scval<K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
 }
 
 fn short_scval(v: &ScVal) -> String {
+    short_debug(v)
+}
+
+/// A full copy of the ledger entries, for before/after comparisons.
+pub(crate) type Snapshot = Vec<(LedgerKey, Option<(LedgerEntry, Option<u32>)>)>;
+
+pub(crate) fn snapshot(env: &Env) -> Snapshot {
+    let mut snap: Snapshot = env
+        .host()
+        .get_stored_entries()
+        .expect("reading test ledger storage")
+        .iter()
+        .map(|(k, v)| {
+            (
+                (**k).clone(),
+                v.as_ref().map(|(e, ttl)| ((**e).clone(), *ttl)),
+            )
+        })
+        .collect();
+    snap.sort_by(|a, b| a.0.cmp(&b.0));
+    snap
+}
+
+/// Describe every entry that was added, removed or changed (value or TTL).
+pub(crate) fn changed_entries(before: &Snapshot, after: &Snapshot) -> Vec<String> {
+    let describe = |k: &LedgerKey| match k {
+        LedgerKey::ContractData(d) => {
+            format!(
+                "{:?} data of {}: {}",
+                d.durability,
+                d.contract,
+                short_scval(&d.key)
+            )
+        }
+        other => short_debug(other),
+    };
+    let mut out = Vec::new();
+    for (k, v) in after {
+        match before.binary_search_by(|(bk, _)| bk.cmp(k)) {
+            Ok(i) if before[i].1 == *v => {}
+            Ok(_) => out.push(format!("changed {}", describe(k))),
+            Err(_) => out.push(format!("created {}", describe(k))),
+        }
+    }
+    for (k, _) in before {
+        if after.binary_search_by(|(ak, _)| ak.cmp(k)).is_err() {
+            out.push(format!("deleted {}", describe(k)));
+        }
+    }
+    out
+}
+
+fn short_debug(v: &impl fmt::Debug) -> String {
     let s = format!("{v:?}");
-    if s.len() > 160 {
-        format!("{}…", &s[..160])
+    if s.chars().count() > 160 {
+        format!("{}…", s.chars().take(160).collect::<String>())
     } else {
         s
     }
