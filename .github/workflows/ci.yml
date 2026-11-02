@@ -44,8 +44,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Long property-based run against the correct vault
-        run: cargo test -p vault-example passes_with_every_check
+      - name: Long property-based runs (vault and Stellar Asset Contract)
+        run: |
+          cargo test -p vault-example passes_with_every_check
+          cargo test -p stellar-asset-example passes_every_check
         env:
           SOROBAN_FUZZ_CASES: "5000"
 
@@ -61,7 +63,17 @@ jobs:
       - run: cargo install --locked cargo-fuzz
       - name: Coverage-guided run against the correct vault (10 minutes)
         working-directory: fuzz
-        run: cargo fuzz run vault -- -max_total_time=600
+        run: cargo fuzz run -s none vault -- -max_total_time=600 -max_len=256 -len_control=0
+      - name: Coverage-guided run against the Stellar Asset Contract (10 minutes)
+        working-directory: fuzz
+        run: cargo fuzz run -s none stellar_asset -- -max_total_time=600 -max_len=256 -len_control=0
+      - name: The buggy vault must crash (sanity check that the fuzzer finds bugs)
+        working-directory: fuzz
+        run: |
+          if cargo fuzz run -s none vault_no_ttl -- -max_total_time=300 -max_len=256 -len_control=0; then
+            echo "libFuzzer did not find the planted TTL bug" && exit 1
+          fi
+          rm -rf artifacts/vault_no_ttl
       - name: Keep any crash input
         if: failure()
         uses: actions/upload-artifact@v4

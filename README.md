@@ -9,8 +9,9 @@ This repository holds the fuzzing part of the **soroban-guard** safety suite. Th
 ├── crates/
 │   └── soroban-fuzzer/      # the fuzzing library (see its README)
 ├── examples/
-│   └── vault/               # token vault, its harness, 5 buggy variants and the tests
-├── fuzz/                    # cargo-fuzz (libFuzzer) targets for the vault
+│   ├── vault/               # token vault, its harness, 5 buggy variants and the tests
+│   └── stellar-asset/       # harness for the built-in Stellar Asset Contract
+├── fuzz/                    # cargo-fuzz (libFuzzer) targets for both examples
 └── .github/workflows/ci.yml # fmt, clippy, tests, nightly long and libFuzzer runs
 ```
 
@@ -47,6 +48,8 @@ Coverage-guided fuzzing needs nightly and cargo-fuzz:
 
 ```bash
 cd fuzz
-cargo +nightly fuzz run vault          # the correct vault: should run without crashing
-cargo +nightly fuzz run vault_no_ttl   # a buggy vault: crashes within seconds
+FLAGS="-max_len=256 -len_control=0"
+cargo +nightly fuzz run -s none vault         -- $FLAGS  # correct vault: runs without crashing
+cargo +nightly fuzz run -s none stellar_asset -- $FLAGS  # the Stellar Asset Contract: same
+cargo +nightly fuzz run -s none vault_no_ttl  -- $FLAGS  # buggy vault: crashes within seconds
 ```

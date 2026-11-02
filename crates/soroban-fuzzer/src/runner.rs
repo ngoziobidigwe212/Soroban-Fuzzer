@@ -242,6 +242,10 @@ impl<H: Harness> Fuzzer<H> {
     /// that reach deeper contract states. All the usual checks run. When one
     /// fails, this panics with the failure report, which libFuzzer records
     /// as a crash.
+    ///
+    /// Run with `cargo fuzz run -s none <target> -- -max_len=256 -len_control=0`:
+    /// safe Rust needs no sanitizer, and a fixed input length lets libFuzzer
+    /// try full-length sequences from the start.
     pub fn fuzz_one(&self, data: &[u8]) {
         let steps = self.decode(data);
         if let Err(f) = self.execute(&steps, &mut Report::default()) {
