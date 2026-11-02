@@ -5,6 +5,7 @@ mod call;
 mod env;
 mod failure;
 mod harness;
+pub mod model;
 mod panic;
 mod report;
 mod resources;
@@ -18,6 +19,7 @@ pub use call::{check_call, record_call};
 pub use env::{advance_ledgers, LedgerJumps};
 pub use failure::{FailureKind, FuzzFailure};
 pub use harness::{Harness, Outcome};
+pub use model::{expect_unless, Balances, TestToken};
 pub use panic::catch_quiet;
 pub use report::Report;
 pub use resources::{ResourceBudget, ResourceUsage};
@@ -30,9 +32,10 @@ pub use proptest;
 pub mod prelude {
     pub use crate::strategies::*;
     pub use crate::{
-        advance_ledgers, check_call, record_call, ActorId, Actors, FailureKind, FuzzFailure,
-        Fuzzer, Harness, LedgerJumps, Outcome, Report, ResourceBudget, ResourceUsage, Step,
+        advance_ledgers, check_call, ensure_eq, expect_unless, record_call, ActorId, Actors,
+        Balances, FailureKind, FuzzFailure, Fuzzer, Harness, LedgerJumps, Outcome, Report,
+        ResourceBudget, ResourceUsage, Step, TestToken,
     };
     pub use proptest::prelude::{any, prop_oneof, BoxedStrategy, Just, Strategy};
-    pub use soroban_sdk::{Address, Env};
+    pub use soroban_sdk::{testutils::Address as _, Address, Env};
 }

@@ -17,6 +17,18 @@ pub enum Outcome {
     Skipped,
 }
 
+impl Outcome {
+    /// Run `update` (typically a model update) only if the call executed,
+    /// then return the outcome:
+    /// `Ok(check_call(env, "burn", got, expected)?.if_executed(|| model.debit(a, x)))`.
+    pub fn if_executed(self, update: impl FnOnce()) -> Self {
+        if self == Outcome::Executed {
+            update();
+        }
+        self
+    }
+}
+
 /// A fuzzing harness for one contract (or a small system of contracts).
 ///
 /// The harness value itself is the "world" for one test case: it typically
