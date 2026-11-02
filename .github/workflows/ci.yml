@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
   schedule:
     - cron: "0 3 * * *" # nightly long fuzz run
 
 env:
   CARGO_TERM_COLOR: always
+  STELLAR_CLI_VERSION: "28.1.0"
 
 jobs:
   check:
@@ -18,18 +20,51 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32v1-none
       - uses: Swatinem/rust-cache@v2
+      - name: Install stellar-cli
+        run: cargo install --locked stellar-cli --version "$STELLAR_CLI_VERSION" --no-default-features
+      # soroban-sdk only builds contracts through stellar-cli. The repository
+      # holds an empty placeholder; replace it so the Wasm tests really run.
+      - name: Build the vault Wasm fixture
+        run: |
+          stellar contract build --package vault-example
+          cp target/wasm32v1-none/release/vault_example.wasm examples/vault/fixtures/vault.wasm
+          test -s examples/vault/fixtures/vault.wasm
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace
+      - name: Check the cargo-fuzz targets compile
+        run: cargo check --manifest-path fuzz/Cargo.toml
 
   long-fuzz:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace --test vault
+      - name: Long property-based run against the correct vault
+        run: cargo test -p vault-example passes_with_every_check
         env:
           SOROBAN_FUZZ_CASES: "5000"
+
+  libfuzzer:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install --locked cargo-fuzz
+      - name: Coverage-guided run against the correct vault (10 minutes)
+        working-directory: fuzz
+        run: cargo fuzz run vault -- -max_total_time=600
+      - name: Keep any crash input
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
