@@ -1,0 +1,18 @@
+name: Feature request
+description: A new check, helper, example harness or integration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Which bug class or workflow isn't covered today? A real contract bug it would have caught is the best motivation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How it could work, and how a test would show it catches the bug without false alarms.
+    validations:
+      required: true

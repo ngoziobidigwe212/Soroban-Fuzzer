@@ -1,0 +1,37 @@
+name: Bug report
+description: The fuzzer missed a bug, raised a false alarm, or behaves differently than documented
+labels: [bug]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of problem
+      options:
+        - Missed a bug it should catch
+        - False alarm on a correct contract
+        - Crash, hang or wrong report
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Paste the fuzzer's report if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A small contract and harness, ideally with the failing sequence as `Fuzzer::replay(vec![...])` or a `SOROBAN_FUZZ_SEED`.
+      render: rust
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: soroban-fuzzer (or commit), soroban-sdk, and Rust.
+    validations:
+      required: true
