@@ -1,0 +1,34 @@
+[package]
+name = "vault-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+soroban-fuzzer = { path = "../crates/soroban-fuzzer" }
+vault-example = { path = "../examples/vault", features = ["testutils"] }
+
+# Keep this crate out of the main workspace: it needs nightly.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "vault"
+path = "fuzz_targets/vault.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vault_no_ttl"
+path = "fuzz_targets/vault_no_ttl.rs"
+test = false
+doc = false
+bench = false
