@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "examples/*"]
+exclude = ["fuzz"]
 
 [workspace.package]
 edition = "2021"
@@ -11,6 +12,17 @@ repository = "https://github.com/soroban-dev-labs/Soroban-Fuzzer"
 [workspace.dependencies]
 soroban-sdk = "29.0.1"
 proptest = "1.12"
+
+# Standard settings for Soroban contract Wasm builds.
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
 
 [profile.test]
 # Contract code is hot in fuzz loops; a little optimisation makes runs much faster.

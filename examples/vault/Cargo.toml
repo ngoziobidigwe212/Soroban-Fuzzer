@@ -1,0 +1,24 @@
+[package]
+name = "vault-example"
+version = "0.0.0"
+description = "Example token vault contract, its soroban-fuzzer harness and deliberately buggy variants"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[features]
+# Builds the fuzz harness and the buggy variants (native only, never Wasm).
+testutils = ["soroban-sdk/testutils", "dep:soroban-fuzzer"]
+
+[dependencies]
+soroban-sdk.workspace = true
+soroban-fuzzer = { path = "../../crates/soroban-fuzzer", optional = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+soroban-fuzzer = { path = "../../crates/soroban-fuzzer" }
