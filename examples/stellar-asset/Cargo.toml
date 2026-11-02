@@ -1,0 +1,15 @@
+[package]
+name = "stellar-asset-example"
+version = "0.0.0"
+description = "soroban-fuzzer harness for the Stellar Asset Contract, the built-in token every Stellar asset uses"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+soroban-fuzzer = { path = "../../crates/soroban-fuzzer" }

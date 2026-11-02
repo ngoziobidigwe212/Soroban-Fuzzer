@@ -11,6 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 soroban-fuzzer = { path = "../crates/soroban-fuzzer" }
 vault-example = { path = "../examples/vault", features = ["testutils"] }
+stellar-asset-example = { path = "../examples/stellar-asset" }
 
 # Keep this crate out of the main workspace: it needs nightly.
 [workspace]
@@ -29,6 +30,13 @@ bench = false
 [[bin]]
 name = "vault_no_ttl"
 path = "fuzz_targets/vault_no_ttl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stellar_asset"
+path = "fuzz_targets/stellar_asset.rs"
 test = false
 doc = false
 bench = false
