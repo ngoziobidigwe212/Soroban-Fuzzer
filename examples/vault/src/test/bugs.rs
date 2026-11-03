@@ -1,5 +1,7 @@
 //! Each buggy vault must be caught, classified correctly and shrunk.
 
+use std::vec;
+
 use soroban_fuzzer::prelude::*;
 
 use super::expect_bug;
