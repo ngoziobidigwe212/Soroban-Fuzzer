@@ -17,6 +17,17 @@ fn missing_require_auth() {
 }
 
 #[test]
+fn missing_auth_regression() {
+    type H = VaultHarness<crate::Vault>;
+    use crate::harness::Action::Deposit;
+    use soroban_fuzzer::strategies::Amount::All;
+
+    Fuzzer::<H>::new()
+        .replay(vec![Step::Call(Deposit(ActorId(0), All))])
+        .unwrap();
+}
+
+#[test]
 fn missing_require_auth_found_by_unsigned_probe() {
     // With the recorded-auth check off, the unsigned replay still catches it.
     expect_bug::<MissingAuthVault>(FailureKind::AuthBypass, 3, |f| {
